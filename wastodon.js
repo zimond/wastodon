@@ -19,13 +19,6 @@ function captureFeedLoad(callback) {
                 characterData: false,
                 childList: true
             });
-            // insert css
-            let css = document.createElement('style');
-            css.innerHTML = `
-            .WB_row_r4 li {
-                width: 20%;
-            }`;
-            document.body.appendChild(css);
             callback(document.body);
         }
     });
@@ -64,21 +57,32 @@ function createSLine() {
 
 function onReblog(e) {
     let node = e.target;
+    // check if this button is disabled
+    if (node.getAttribute('data-wastodon-enabled') === 'false') {
+        return;
+    }
+    let card = seekCurrentCard(node);
     // check if authorized
     authorizeMastodon().then(({ header, domain }) => {
-        let data = fetchWeiboText(node);
+        let data = fetchWeiboText(card);
         let reblog = `${data.author}: ${data.text} (转自微博 ${data.ref}`;
         let form = new FormData();
         form.set('status', reblog);
         form.set('visibility', 'public');
-        return fetch(`https://${domain}/api/v1/statuses`, {
-            body: form,
-            mode: 'cors',
-            method: 'POST',
-            headers: header
+        changeButtonStatus(node, 'loading');
+        return tryUploadImages(card, header, domain).then(ids => {
+            for (let id of ids) {
+                form.append('media_ids[]', id);
+            }
+            return fetch(`https://${domain}/api/v1/statuses`, {
+                body: form,
+                mode: 'cors',
+                method: 'POST',
+                headers: header
+            })
         })
     }).then(res => res.json()).then(res => {
-        console.log(res)
+        changeLoadingText(card, '转推成功');
     }).catch(e => {
         console.error(e)
     })
@@ -100,7 +104,7 @@ function authorizeMastodon() {
     })
 }
 
-function fetchWeiboText(node) {
+function seekCurrentCard(node) {
     let parent = node.parentElement;
     let inRetweet = false;
     while (parent !== document.body) {
@@ -114,16 +118,66 @@ function fetchWeiboText(node) {
         }
     }
     if (parent === node) return undefined;
-    let refElement = parent.querySelector('a[node-type="feed_list_item_date"]');
+    else return parent;
+}
+
+function fetchWeiboText(card) {
+    let refElement = card.querySelector('a[node-type="feed_list_item_date"]');
     let ref = '';
     if (refElement) {
         ref = refElement.href.split('?').shift();
     }
-    let text = (parent.querySelector('.WB_text') || {}).innerText || '';
-    let author = parent.querySelector('.WB_info > a.W_fb').getAttribute('title') || '';
+    let author = card.querySelector('.WB_info > a.W_fb').getAttribute('title') || '';
+    let textBlocks = card.querySelectorAll('.WB_text');
+    let text = textBlocks.item(textBlocks.length - 1).innerText;
+    text = text.split('收起全文d').shift();
     return {
         text,
         ref,
         author
     }
+}
+
+function changeButtonStatus(node, type) {
+    node = node.parentNode;
+    if (type === 'loading') {
+        let loading = document.createElement('span');
+        loading.className = 'wastodon-loading';
+        loading.innerHTML = '正在发送...';
+        loading.setAttribute('data-wastodon-enabled', 'false');
+        node.parentNode.replaceChild(loading, node);
+    }
+}
+
+function changeLoadingText(card, text) {
+    let loading = card.querySelector('.wastodon-loading');
+    loading.innerText = text;
+}
+
+function tryUploadImages(card, header, domain) {
+    let images = card.querySelectorAll('.WB_media_a > .WB_pic > img');
+    // we currently only use the first 4 images
+    images = Array.prototype.slice.call(images).map(img => img.src.replace('thumb150', 'mw690')).slice(0, 4);
+    return Promise.all(images.map(img => {
+        return fetch(img).then(res => res.blob())
+    })).then(images => {
+        return Promise.all(images.map((image, index) => {
+            // upload this image
+            changeLoadingText(card, `上传图片 ${index + 1}/${images.length}`);
+            let form = new FormData();
+            form.set('file', image);
+            return fetch(`https://${domain}/api/v1/media`, {
+                body: form,
+                mode: 'cors',
+                method: 'POST',
+                headers: header
+            }).then(res => res.json())
+        }));
+    }).then(results => {
+        return results.map(res => res.id);
+    }).catch(e => {
+        changeLoadingText(card, '上传图片失败');
+        console.error(e);
+        throw e;
+    });
 }

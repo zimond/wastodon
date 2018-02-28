@@ -1,7 +1,7 @@
 {
     "manifest_version": 2,
     "name": "Wastodon",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Reblog a weibo to Mastodon",
     "icons": {
         "48": "icons/border-48.png"
@@ -13,6 +13,9 @@
             ],
             "js": [
                 "wastodon.js"
+            ],
+            "css": [
+                "wastodon.css"
             ]
         }
     ],

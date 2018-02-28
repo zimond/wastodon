@@ -1,0 +1,8 @@
+.WB_row_r4 li {
+    width: 20%;
+}
+
+.wastodon-loading {
+    color: #2cbc63;
+    cursor: text;
+}
