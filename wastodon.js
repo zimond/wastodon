@@ -63,7 +63,8 @@ function onReblog(e) {
     }
     let card = seekCurrentCard(node);
     // check if authorized
-    authorizeMastodon().then(({ header, domain }) => {
+    authorizeMastodon().then(result => {
+        let { header, domain } = result;
         let data = fetchWeiboText(card);
         let reblog = `${data.author}: ${data.text} (转自微博 ${data.ref}`;
         let form = new FormData();

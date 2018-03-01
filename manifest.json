@@ -1,4 +1,6 @@
 {
+"update_url": "https://clients2.google.com/service/update2/crx",
+
     "manifest_version": 2,
     "name": "Wastodon",
     "version": "1.0.1",
@@ -12,6 +14,7 @@
                 "*://*.weibo.com/*"
             ],
             "js": [
+                "browser-polyfill.min.js",
                 "wastodon.js"
             ],
             "css": [
@@ -27,6 +30,7 @@
     },
     "background": {
         "scripts": [
+            "browser-polyfill.min.js",
             "background.js"
         ]
     },

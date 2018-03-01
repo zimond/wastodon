@@ -1,5 +1,5 @@
 .WB_row_r4 li {
-    width: 20%;
+    width: 20% !important;
 }
 
 .wastodon-loading {
