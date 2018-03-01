@@ -65,28 +65,93 @@ function onReblog(e) {
     // check if authorized
     authorizeMastodon().then(result => {
         let { header, domain } = result;
-        let data = fetchWeiboText(card);
-        let reblog = `${data.author}: ${data.text} (转自微博 ${data.ref}`;
-        let form = new FormData();
-        form.set('status', reblog);
-        form.set('visibility', 'public');
-        changeButtonStatus(node, 'loading');
-        return tryUploadImages(card, header, domain).then(ids => {
-            for (let id of ids) {
-                form.append('media_ids[]', id);
+        showConfigurationPanel(card, node, (config) => {
+            let data = fetchWeiboText(card);
+            for (let key in config) {
+                data[key] = config[key];
             }
-            return fetch(`https://${domain}/api/v1/statuses`, {
-                body: form,
-                mode: 'cors',
-                method: 'POST',
-                headers: header
+            let reblog = `${data.author}: ${data.text} (转自微博 ${data.ref}`;
+            let form = new FormData();
+            form.set('status', reblog);
+            form.set('visibility', 'public');
+            if (data.nsfw) form.set('sensitive', 'true');
+            if (data.ifHide) form.set('spoiler_text', data.hideTextContent);
+            form.set('visibility', data.visibility);
+            changeButtonStatus(node, 'loading');
+            return tryUploadImages(card, header, domain).then(ids => {
+                for (let id of ids) {
+                    form.append('media_ids[]', id);
+                }
+                return fetch(`https://${domain}/api/v1/statuses`, {
+                    body: form,
+                    mode: 'cors',
+                    method: 'POST',
+                    headers: header
+                })
+            }).then(res => res.json()).then(res => {
+                changeLoadingText(card, '转推成功');
+            }).catch(e => {
+                console.error(e)
             })
-        })
-    }).then(res => res.json()).then(res => {
-        changeLoadingText(card, '转推成功');
-    }).catch(e => {
-        console.error(e)
+        }).catch(e => {
+            console.error(e)
+        });
     })
+}
+
+function showConfigurationPanel(card, node, callback) {
+    let panel = document.createElement('div');
+    panel.className = 'wastodon-config-panel';
+    // nsfw checker
+    let form = `
+        <div class="wastodon-toggles">
+            <input type='checkbox' class='wastodon-ios-toggle' id="check1">
+            <label class="wastodon-checkbox-label" for="check1" data-on="NSFW开" data-off="NSFW关"></label><br/>
+            <input type='checkbox' class='wastodon-ios-toggle' id="check2">
+            <label class="wastodon-checkbox-label" for="check2" data-on="隐藏正文" data-off="显示正文"></label><br/>
+        </div>
+        <textarea id="hide-text" style="display: none;"></textarea>
+        <div class="wastodon-select wastodon-visibility-public" data-visibility="public">公开</div>
+        <ul class="wastodon-selector" style="display: none;">
+            <li class="wastodon-select-option wastodon-visibility-public" data-visibility="public">公开</li>
+            <li class="wastodon-select-option wastodon-visibility-private" data-visibility="private">仅对好友可见</li>
+            <li class="wastodon-select-option wastodon-visibility-unlisted" data-visibility="unlisted">仅对站内可见</li>
+        </ul>
+        <span class="wastodon-button">发送</span>`;
+    panel.innerHTML = form;
+    setTimeout(() => {
+        let check1 = document.getElementById('check1');
+        let check2 = document.getElementById('check2');
+        let hideText = document.getElementById('hide-text');
+        let select = panel.querySelector('.wastodon-select');
+        let options = panel.querySelectorAll('.wastodon-select-option');
+        let menu = panel.querySelector('.wastodon-selector');
+        check2.addEventListener('change', () => {
+            if (check2.checked) hideText.style.display = 'block';
+            else hideText.style.display = 'none';
+        });
+        select.addEventListener('click', () => {
+            if (menu.style.display === 'block') menu.style.display = 'none';
+            else menu.style.display = 'block';
+        });
+        menu.addEventListener('click', function(e) {
+            let option = e.target;
+            let visibility = option.getAttribute('data-visibility');
+            select.className = `wastodon-select wastodon-visibility-${visibility}`;
+            select.setAttribute('data-visibility', visibility);
+            select.innerText = option.innerText;
+            option.parentElement.style.display = 'none';
+        });
+        panel.querySelector('.wastodon-button').addEventListener('click', function() {
+            let nsfw = check1.checked;
+            let ifHide = check2.checked;
+            let hideTextContent = hideText.value;
+            let visibility = select.getAttribute('data-visibility');
+            panel.parentNode.removeChild(panel);
+            callback({ nsfw, ifHide, hideTextContent, visibility });
+        });
+    });
+    card.querySelector('.WB_feed_handle').appendChild(panel);
 }
 
 function authorizeMastodon() {
@@ -128,8 +193,8 @@ function fetchWeiboText(card) {
     if (refElement) {
         ref = refElement.href.split('?').shift();
     }
-    let author = card.querySelector('.WB_info > a.W_fb').getAttribute('title') || '';
-    let textBlocks = card.querySelectorAll('.WB_text');
+    let author = card.querySelector('.WB_info > a.W_fb').innerText;
+    let textBlocks = card.querySelectorAll('.WB_detail .WB_text');
     let text = textBlocks.item(textBlocks.length - 1).innerText;
     text = text.split('收起全文d').shift();
     return {
