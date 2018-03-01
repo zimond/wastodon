@@ -87,15 +87,14 @@ function onReblog(e) {
                     mode: 'cors',
                     method: 'POST',
                     headers: header
-                })
+                });
             }).then(res => res.json()).then(res => {
                 changeLoadingText(card, '转推成功');
             }).catch(e => {
-                console.error(e)
+                changeLoadingText(card, '转推失败');
+                console.error(e);
             })
-        }).catch(e => {
-            console.error(e)
-        });
+        })
     })
 }
 
@@ -197,6 +196,7 @@ function fetchWeiboText(card) {
     let textBlocks = card.querySelectorAll('.WB_detail .WB_text');
     let text = textBlocks.item(textBlocks.length - 1).innerText;
     text = text.split('收起全文d').shift();
+    if (text.length > 250) text = text.slice(0, 248) + '...';
     return {
         text,
         ref,
